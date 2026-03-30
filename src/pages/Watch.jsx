@@ -65,8 +65,8 @@ export default function Watch() {
     const safeProxyFetch = async (path) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${path}`);
-        // Base path is already /consumet/ from fetchNativeStream calls
-        const res = await fetch(path);
+        // Call the Netlify Serverless Proxy Function
+        const res = await fetch(`/.netlify/functions/consumet?path=${encodeURIComponent(path)}`);
         if (!res.ok) throw new Error("Proxy fetch failed");
         return await res.json();
       } catch (err) {
@@ -86,21 +86,21 @@ export default function Watch() {
       for (const provider of PROVIDERS) {
         if (!isMounted) break;
         try {
-          // Search via broadened /consumet/ rewrite
-          const searchData = await safeProxyFetch(`/consumet/anime/${provider}/${query}`);
+          // Search via Serverless Proxy
+          const searchData = await safeProxyFetch(`/anime/${provider}/${query}`);
           if (!searchData || !searchData.results?.length) continue;
           
           const slugId = searchData.results[0].id;
           
-          // Info via broadened /consumet/ rewrite
-          const infoData = await safeProxyFetch(`/consumet/anime/${provider}/info/${slugId}`);
+          // Info via Serverless Proxy
+          const infoData = await safeProxyFetch(`/anime/${provider}/info/${slugId}`);
           if (!infoData || !infoData.episodes) continue;
           
           const epData = infoData.episodes.find(e => Number(e.number) === activeEpisode);
           if (!epData) continue;
           
-          // Stream via broadened /consumet/ rewrite
-          const streamData = await safeProxyFetch(`/consumet/anime/${provider}/watch/${epData.id}`);
+          // Stream via Serverless Proxy
+          const streamData = await safeProxyFetch(`/anime/${provider}/watch/${epData.id}`);
           if (!streamData || !streamData.sources?.length) continue;
           
           const bestSource = streamData.sources.find(s => s.quality === '1080p') || streamData.sources.find(s => s.quality === 'auto') || streamData.sources[0];
@@ -162,8 +162,8 @@ export default function Watch() {
           const data = await res.json();
           metadata = data.data;
         } else {
-          // Fetch from Consumet via Netlify rewrite (corrected broader path)
-          const consumetUrl = `/consumet/anime/gogoanime/info/${id}`;
+          // Fetch from Consumet via Serverless Proxy
+          const consumetUrl = `/.netlify/functions/consumet?path=${encodeURIComponent(`/anime/gogoanime/info/${id}`)}`;
           const res = await fetch(consumetUrl);
           const data = await res.json();
           const consumetData = data;

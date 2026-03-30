@@ -1,11 +1,11 @@
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "encrypted-media=*, autoplay=*, picture-in-picture=*, web-share=*"
+    Access-Control-Allow-Origin = "*"
+
 [[redirects]]
   from = "/jikan/*"
   to = "https://api.jikan.moe/v4/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/consumet/*"
-  to = "https://c.delusionz.xyz/:splat"
   status = 200
   force = true
