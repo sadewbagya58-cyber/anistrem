@@ -151,26 +151,56 @@ export default function Watch() {
     const fetchWatchData = async () => {
       try {
         setLoading(true);
-        // Fetch specific anime details from Jikan
-        const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
-        console.log(`[Diagnostic] Connecting to server... ${jikanUrl}`);
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(jikanUrl)}`);
-        const data = await res.json();
-        
-        if (data.data) {
-          setAnime(data.data);
-          
-          // Generate a dummy tracklist of episodes based on real total episodes count
-          const totalEp = data.data.episodes || 24;
-          const dummyEps = Array.from({ length: totalEp }, (_, i) => ({
-            num: i + 1,
-            title: `Episode ${i + 1}`
-          }));
-          setEpisodes(dummyEps);
+        const isNumeric = /^\d+$/.test(id);
+        let metadata = null;
 
-          // Phase 2: Resolve TMDB ID from External Links
-          const resolvedTmdb = await fetchTmdbId(id);
-          if (resolvedTmdb) setTmdbId(resolvedTmdb);
+        if (isNumeric) {
+          // Fetch from Jikan (numeric ID)
+          const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
+          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(jikanUrl)}`);
+          const data = await res.json();
+          metadata = data.data;
+        } else {
+          // Fetch from Consumet (Slug ID)
+          const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/info/${id}`;
+          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(consumetUrl)}`);
+          const data = await res.json();
+          // Normalize Consumet info to match Jikan-like structure
+          metadata = {
+            mal_id: data.id,
+            title: typeof data.title === 'object' ? (data.title.english || data.title.romaji || data.title.native) : data.title,
+            images: { webp: { large_image_url: data.image } },
+            episodes: data.totalEpisodes || data.episodes?.length || '?',
+            type: data.type || 'TV',
+            score: data.score || 'N/A',
+            rating: data.rating || 'N/A',
+            synopsis: data.description || '',
+            genres: data.genres?.map((g, i) => ({ mal_id: i, name: g })),
+            status: data.status || 'Unknown',
+            trailer: { embed_url: data.trailer?.embed_url }
+          };
+
+          // If Consumet info has real episode data, use it
+          if (data.episodes) {
+             setEpisodes(data.episodes.map(e => ({ num: e.number, title: `Episode ${e.number}`, id: e.id })));
+          }
+        }
+        
+        if (metadata) {
+          setAnime(metadata);
+          
+          if (isNumeric) {
+             // Generate dummy episodes for Jikan (kept from original logic)
+             const totalEp = metadata.episodes || 24;
+             setEpisodes(Array.from({ length: totalEp }, (_, i) => ({
+               num: i + 1,
+               title: `Episode ${i + 1}`
+             })));
+
+             // Resolve TMDB ID for Jikan numeric IDs
+             const resolvedTmdb = await fetchTmdbId(id);
+             if (resolvedTmdb) setTmdbId(resolvedTmdb);
+          }
         }
       } catch (error) {
         console.error("Error fetching watch data:", error);

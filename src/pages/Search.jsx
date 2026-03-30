@@ -16,10 +16,21 @@ export default function Search() {
     const fetchSearch = async () => {
       try {
         setLoading(true);
-        // Using Jikan api to fetch according to query
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`)}`);
+        // Using Consumet API for search (wrapped in proxy)
+        const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/${encodeURIComponent(query)}`;
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(consumetUrl)}`);
         const data = await res.json();
-        setResults(data.data || []);
+        
+        // Normalize Consumet search results to match AnimeCard expectations
+        const normalized = (data.results || []).map(item => ({
+          mal_id: item.id,
+          title: typeof item.title === 'object' ? (item.title.english || item.title.romaji || item.title.native) : item.title,
+          images: { webp: { large_image_url: item.image } },
+          episodes: item.releaseDate || '?',
+          type: item.subOrDub || 'SUB'
+        }));
+        
+        setResults(normalized);
       } catch (error) {
         console.error("Search failed:", error);
       } finally {
