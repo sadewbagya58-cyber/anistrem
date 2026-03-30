@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// Using Netlify Rewrites for CORS-free API access
+// Jikan API natively supports CORS; Consumet requires Netlify Rewrites
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
@@ -31,7 +31,7 @@ export default function Watch() {
 
   const fetchTmdbId = async (malId) => {
     try {
-      const externalUrl = `/jikan/anime/${malId}/external`;
+      const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
       console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
       const res = await fetch(externalUrl);
       const data = await res.json();
@@ -62,15 +62,11 @@ export default function Watch() {
     let isMounted = true;
     if (!anime) return;
 
-    const safeProxyFetch = async (url) => {
+    const safeProxyFetch = async (path) => {
       try {
-        console.log(`[Diagnostic] Connecting to server... ${url}`);
-        // Ensure we use the relative /consumet/ path for any herbkuapp references
-        let proxyUrl = url;
-        if (url.includes('https://consumet-api.herokuapp.com')) {
-           proxyUrl = url.replace('https://consumet-api.herokuapp.com', '/consumet');
-        }
-        const res = await fetch(proxyUrl);
+        console.log(`[Diagnostic] Connecting to server... ${path}`);
+        // Base path is already /consumet/ from fetchNativeStream calls
+        const res = await fetch(path);
         if (!res.ok) throw new Error("Proxy fetch failed");
         return await res.json();
       } catch (err) {
@@ -160,8 +156,8 @@ export default function Watch() {
         let metadata = null;
 
         if (isNumeric) {
-          // Fetch from Jikan via Netlify rewrite
-          const jikanUrl = `/jikan/anime/${id}`;
+          // Fetch from Jikan directly (supports CORS)
+          const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
           const res = await fetch(jikanUrl);
           const data = await res.json();
           metadata = data.data;

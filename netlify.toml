@@ -6,6 +6,6 @@
 
 [[redirects]]
   from = "/consumet/*"
-  to = "https://consumet-api.herokuapp.com/:splat"
+  to = "https://consumet-api.vercel.app/:splat"
   status = 200
   force = true

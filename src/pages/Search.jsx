@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// Using Netlify Rewrites for CORS-free API access
+// Jikan API natively supports CORS; Consumet requires Netlify Rewrites
 import { useSearchParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import AnimeCard from '../components/AnimeCard';
@@ -17,8 +17,8 @@ export default function Search() {
     const fetchSearch = async () => {
       try {
         setLoading(true);
-        // Using Jikan api via local Netlify rewrite
-        const res = await fetch(`/jikan/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`);
+        // Using Jikan api directly (CORS is supported)
+        const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`);
         const data = await res.json();
         setResults(data.data || []);
       } catch (error) {

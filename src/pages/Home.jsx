@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// Using Netlify Rewrites for CORS-free API access
+// Jikan API natively supports CORS; Consumet requires Netlify Rewrites
 import Navbar from '../components/Navbar';
 import HeroCarousel from '../components/HeroCarousel';
 import AnimeCard from '../components/AnimeCard';
@@ -20,26 +20,26 @@ export default function Home() {
       try {
         setLoading(true);
         
-        // Helper for Netlify-native proxied fetch (same origin)
-        const proxiedFetch = async (url) => {
+        // Helper for API fetching (Jikan is direct, Consumet is /consumet/)
+        const apiFetch = async (url) => {
            const res = await fetch(url);
            return await res.json();
         }
 
-        // 1. Fetch Trending currently airing anime via /jikan/ rewrite
-        const trendingData = await proxiedFetch('/jikan/top/anime?filter=airing&limit=10');
+        // 1. Fetch Trending currently airing anime via direct Jikan (CORS-safe)
+        const trendingData = await apiFetch('https://api.jikan.moe/v4/top/anime?filter=airing&limit=10');
         await delay(500); // delay to respect jikan rate limit
 
-        // 2. Fetch Top Anime Overall for the Rankings Sidebar
-        const topData = await proxiedFetch('/jikan/top/anime?limit=10');
+        // 2. Fetch Top Anime Overall via direct Jikan
+        const topData = await apiFetch('https://api.jikan.moe/v4/top/anime?limit=10');
         await delay(500);
 
-        // 3. Fetch current season anime for "Recently Updated"
-        const recentData = await proxiedFetch('/jikan/seasons/now?limit=8');
+        // 3. Fetch current season anime via direct Jikan
+        const recentData = await apiFetch('https://api.jikan.moe/v4/seasons/now?limit=8');
         await delay(500);
         
-        // 4. Fetch One Piece explicitly for Hero
-        const opData = await proxiedFetch('/jikan/anime/21');
+        // 4. Fetch One Piece explicitly for Hero via direct Jikan
+        const opData = await apiFetch('https://api.jikan.moe/v4/anime/21');
 
         if (trendingData.data) {
           setTrending(trendingData.data);
