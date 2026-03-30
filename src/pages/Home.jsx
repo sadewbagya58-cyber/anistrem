@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/raw?url=
+// CORS Proxy: https://corsproxy.io/?
 import Navbar from '../components/Navbar';
 import HeroCarousel from '../components/HeroCarousel';
 import AnimeCard from '../components/AnimeCard';
@@ -36,7 +36,7 @@ export default function Home() {
         
         // Helper for proxied fetch
         const proxiedFetch = async (url) => {
-           const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+           const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(url));
            return await res.json();
         }
 

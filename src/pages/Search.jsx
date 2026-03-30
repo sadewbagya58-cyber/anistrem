@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/raw?url=
+// CORS Proxy: https://corsproxy.io/?
 import { useSearchParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import AnimeCard from '../components/AnimeCard';
@@ -19,7 +19,7 @@ export default function Search() {
         setLoading(true);
         // Using Consumet API for search (wrapped in proxy)
         const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/${encodeURIComponent(query)}`;
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(consumetUrl)}`);
+        const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(consumetUrl));
         const data = await res.json();
         
         // Normalize Consumet search results to match AnimeCard expectations

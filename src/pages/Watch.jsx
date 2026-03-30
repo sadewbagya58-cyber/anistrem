@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/raw?url=
+// CORS Proxy: https://corsproxy.io/?
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
@@ -33,7 +33,7 @@ export default function Watch() {
     try {
       const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
       console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
-      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(externalUrl)}`);
+      const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(externalUrl));
       const data = await res.json();
       const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
       if (tmdbLink) {
@@ -65,8 +65,7 @@ export default function Watch() {
     const safeProxyFetch = async (url) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${url}`);
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl);
+        const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(url));
         if (!res.ok) throw new Error("Proxy fetch failed");
         return await res.json();
       } catch (err) {
@@ -158,13 +157,13 @@ export default function Watch() {
         if (isNumeric) {
           // Fetch from Jikan (numeric ID)
           const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
-          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(jikanUrl)}`);
+          const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(jikanUrl));
           const data = await res.json();
           metadata = data.data;
         } else {
           // Fetch from Consumet (Slug ID)
           const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/info/${id}`;
-          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(consumetUrl)}`);
+          const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(consumetUrl));
           const data = await res.json();
           // Normalize Consumet info to match Jikan-like structure
           metadata = {
