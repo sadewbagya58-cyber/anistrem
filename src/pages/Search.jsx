@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+// CORS Proxy: https://api.allorigins.win/raw?url=
 import { useSearchParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import AnimeCard from '../components/AnimeCard';
