@@ -32,7 +32,7 @@ export default function Watch() {
     try {
       const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
       console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
-      const res = await fetch(externalUrl);
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(externalUrl)}`);
       const data = await res.json();
       const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
       if (tmdbLink) {
@@ -154,7 +154,7 @@ export default function Watch() {
         // Fetch specific anime details from Jikan
         const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
         console.log(`[Diagnostic] Connecting to server... ${jikanUrl}`);
-        const res = await fetch(jikanUrl);
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(jikanUrl)}`);
         const data = await res.json();
         
         if (data.data) {

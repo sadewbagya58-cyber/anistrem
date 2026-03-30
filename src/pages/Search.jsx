@@ -17,7 +17,7 @@ export default function Search() {
       try {
         setLoading(true);
         // Using Jikan api to fetch according to query
-        const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`);
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`)}`);
         const data = await res.json();
         setResults(data.data || []);
       } catch (error) {

@@ -20,22 +20,22 @@ export default function Home() {
         setLoading(true);
         
         // 1. Fetch Trending currently airing anime
-        const trendingRes = await fetch('https://api.jikan.moe/v4/top/anime?filter=airing&limit=10');
+        const trendingRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.jikan.moe/v4/top/anime?filter=airing&limit=10')}`);
         const trendingData = await trendingRes.json();
         await delay(500); // delay to respect rate limit
 
         // 2. Fetch Top Anime Overall for the Rankings Sidebar
-        const topRes = await fetch('https://api.jikan.moe/v4/top/anime?limit=10');
+        const topRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.jikan.moe/v4/top/anime?limit=10')}`);
         const topData = await topRes.json();
         await delay(500);
 
         // 3. Fetch current season anime for "Recently Updated"
-        const recentRes = await fetch('https://api.jikan.moe/v4/seasons/now?limit=8');
+        const recentRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.jikan.moe/v4/seasons/now?limit=8')}`);
         const recentData = await recentRes.json();
         await delay(500);
         
         // 4. Fetch One Piece explicitly for Hero
-        const opRes = await fetch('https://api.jikan.moe/v4/anime/21');
+        const opRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.jikan.moe/v4/anime/21')}`);
         const opData = await opRes.json();
 
         if (trendingData.data) {
