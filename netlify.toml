@@ -6,6 +6,6 @@
 
 [[redirects]]
   from = "/consumet/*"
-  to = "https://consumet-api.vercel.app/:splat"
+  to = "https://c.delusionz.xyz/:splat"
   status = 200
   force = true

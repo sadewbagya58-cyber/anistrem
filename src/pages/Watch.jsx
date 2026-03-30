@@ -261,6 +261,8 @@ export default function Watch() {
                     title={`Trailer for ${title}`}
                     src={`${anime.trailer.embed_url}&autoplay=1`}
                     className="w-full h-full border-0 absolute inset-0 bg-black"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; full-screen"
+                    referrerPolicy="origin"
                     allowFullScreen
                   ></iframe>
                  ) : (
