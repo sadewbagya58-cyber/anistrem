@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #a3e635; /* Tailwind Lime 400 */
+  --color-brand-hover: #84cc16; /* Tailwind Lime 500 */
+  --color-background: #09090b; /* Zinc 950 */
+  --color-surface: #18181b; /* Zinc 900 */
+  --color-surface-hover: #27272a; /* Zinc 800 */
+  --color-text: #f4f4f5; /* Zinc 100 */
+  --color-text-muted: #a1a1aa; /* Zinc 400 */
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  }
+  
+  /* Smooth scrolling for the whole page */
+  html {
+    scroll-behavior: smooth;
+  }
+}
