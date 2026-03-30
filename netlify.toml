@@ -6,6 +6,6 @@
 
 [[redirects]]
   from = "/consumet/*"
-  to = "https://consumet-api.herokuapp.com/anime/gogoanime/:splat"
+  to = "https://consumet-api.herokuapp.com/:splat"
   status = 200
   force = true

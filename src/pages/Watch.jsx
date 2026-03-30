@@ -65,10 +65,10 @@ export default function Watch() {
     const safeProxyFetch = async (url) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${url}`);
-        // Use /consumet/ rewrite if URL starts with herokuapp, else try relative
+        // Ensure we use the relative /consumet/ path for any herbkuapp references
         let proxyUrl = url;
-        if (url.includes('consumet-api.herokuapp.com/anime/gogoanime')) {
-           proxyUrl = url.replace('https://consumet-api.herokuapp.com/anime/gogoanime', '/consumet');
+        if (url.includes('https://consumet-api.herokuapp.com')) {
+           proxyUrl = url.replace('https://consumet-api.herokuapp.com', '/consumet');
         }
         const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error("Proxy fetch failed");
@@ -90,21 +90,21 @@ export default function Watch() {
       for (const provider of PROVIDERS) {
         if (!isMounted) break;
         try {
-          // Search
-          const searchData = await safeProxyFetch(`https://consumet-api.herokuapp.com/anime/${provider}/${query}`);
+          // Search via broadened /consumet/ rewrite
+          const searchData = await safeProxyFetch(`/consumet/anime/${provider}/${query}`);
           if (!searchData || !searchData.results?.length) continue;
           
           const slugId = searchData.results[0].id;
           
-          // Info
-          const infoData = await safeProxyFetch(`https://consumet-api.herokuapp.com/anime/${provider}/info/${slugId}`);
+          // Info via broadened /consumet/ rewrite
+          const infoData = await safeProxyFetch(`/consumet/anime/${provider}/info/${slugId}`);
           if (!infoData || !infoData.episodes) continue;
           
           const epData = infoData.episodes.find(e => Number(e.number) === activeEpisode);
           if (!epData) continue;
           
-          // Stream
-          const streamData = await safeProxyFetch(`https://consumet-api.herokuapp.com/anime/${provider}/watch/${epData.id}`);
+          // Stream via broadened /consumet/ rewrite
+          const streamData = await safeProxyFetch(`/consumet/anime/${provider}/watch/${epData.id}`);
           if (!streamData || !streamData.sources?.length) continue;
           
           const bestSource = streamData.sources.find(s => s.quality === '1080p') || streamData.sources.find(s => s.quality === 'auto') || streamData.sources[0];
@@ -166,8 +166,8 @@ export default function Watch() {
           const data = await res.json();
           metadata = data.data;
         } else {
-          // Fetch from Consumet via Netlify rewrite
-          const consumetUrl = `/consumet/info/${id}`;
+          // Fetch from Consumet via Netlify rewrite (corrected broader path)
+          const consumetUrl = `/consumet/anime/gogoanime/info/${id}`;
           const res = await fetch(consumetUrl);
           const data = await res.json();
           const consumetData = data;
