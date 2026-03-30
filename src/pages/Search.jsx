@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/get?url=
+// Using Netlify Rewrites for CORS-free API access
 import { useSearchParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import AnimeCard from '../components/AnimeCard';
@@ -17,12 +17,10 @@ export default function Search() {
     const fetchSearch = async () => {
       try {
         setLoading(true);
-        // Using Jikan api to fetch according to query (wrapped in AllOrigins JSON proxy)
-        const jikanUrl = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`;
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(jikanUrl)}`);
+        // Using Jikan api via local Netlify rewrite
+        const res = await fetch(`/jikan/anime?q=${encodeURIComponent(query)}&limit=24&sfw=true`);
         const data = await res.json();
-        const parsed = JSON.parse(data.contents);
-        setResults(parsed.data || []);
+        setResults(data.data || []);
       } catch (error) {
         console.error("Search failed:", error);
       } finally {

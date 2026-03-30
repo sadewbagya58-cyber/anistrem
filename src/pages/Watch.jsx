@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/get?url=
+// Using Netlify Rewrites for CORS-free API access
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
@@ -31,12 +31,11 @@ export default function Watch() {
 
   const fetchTmdbId = async (malId) => {
     try {
-      const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
+      const externalUrl = `/jikan/anime/${malId}/external`;
       console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
-      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(externalUrl)}`);
+      const res = await fetch(externalUrl);
       const data = await res.json();
-      const parsed = JSON.parse(data.contents);
-      const tmdbLink = parsed.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
+      const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
       if (tmdbLink) {
         const match = tmdbLink.url.match(/\/(tv|movie)\/(\d+)/);
         if (match && match[2]) {
@@ -66,10 +65,14 @@ export default function Watch() {
     const safeProxyFetch = async (url) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${url}`);
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        // Use /consumet/ rewrite if URL starts with herokuapp, else try relative
+        let proxyUrl = url;
+        if (url.includes('consumet-api.herokuapp.com/anime/gogoanime')) {
+           proxyUrl = url.replace('https://consumet-api.herokuapp.com/anime/gogoanime', '/consumet');
+        }
+        const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error("Proxy fetch failed");
-        const data = await res.json();
-        return JSON.parse(data.contents);
+        return await res.json();
       } catch (err) {
         console.warn("Proxy fetch error:", err);
         return null;
@@ -157,19 +160,17 @@ export default function Watch() {
         let metadata = null;
 
         if (isNumeric) {
-          // Fetch from Jikan (numeric ID)
-          const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
-          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(jikanUrl)}`);
+          // Fetch from Jikan via Netlify rewrite
+          const jikanUrl = `/jikan/anime/${id}`;
+          const res = await fetch(jikanUrl);
           const data = await res.json();
-          const parsed = JSON.parse(data.contents);
-          metadata = parsed.data;
+          metadata = data.data;
         } else {
-          // Fetch from Consumet (Slug ID)
-          const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/info/${id}`;
-          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(consumetUrl)}`);
+          // Fetch from Consumet via Netlify rewrite
+          const consumetUrl = `/consumet/info/${id}`;
+          const res = await fetch(consumetUrl);
           const data = await res.json();
-          const parsed = JSON.parse(data.contents);
-          const consumetData = parsed;
+          const consumetData = data;
           
           // Normalize Consumet info to match Jikan-like structure
           metadata = {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://api.allorigins.win/get?url=
+// Using Netlify Rewrites for CORS-free API access
 import Navbar from '../components/Navbar';
 import HeroCarousel from '../components/HeroCarousel';
 import AnimeCard from '../components/AnimeCard';
@@ -20,27 +20,26 @@ export default function Home() {
       try {
         setLoading(true);
         
-        // Helper for AllOrigins JSON wrapper proxied fetch
+        // Helper for Netlify-native proxied fetch (same origin)
         const proxiedFetch = async (url) => {
-           const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-           const data = await res.json();
-           return JSON.parse(data.contents);
+           const res = await fetch(url);
+           return await res.json();
         }
 
-        // 1. Fetch Trending currently airing anime
-        const trendingData = await proxiedFetch('https://api.jikan.moe/v4/top/anime?filter=airing&limit=10');
-        await delay(500); // delay to respect rate limit
+        // 1. Fetch Trending currently airing anime via /jikan/ rewrite
+        const trendingData = await proxiedFetch('/jikan/top/anime?filter=airing&limit=10');
+        await delay(500); // delay to respect jikan rate limit
 
         // 2. Fetch Top Anime Overall for the Rankings Sidebar
-        const topData = await proxiedFetch('https://api.jikan.moe/v4/top/anime?limit=10');
+        const topData = await proxiedFetch('/jikan/top/anime?limit=10');
         await delay(500);
 
         // 3. Fetch current season anime for "Recently Updated"
-        const recentData = await proxiedFetch('https://api.jikan.moe/v4/seasons/now?limit=8');
+        const recentData = await proxiedFetch('/jikan/seasons/now?limit=8');
         await delay(500);
         
         // 4. Fetch One Piece explicitly for Hero
-        const opData = await proxiedFetch('https://api.jikan.moe/v4/anime/21');
+        const opData = await proxiedFetch('/jikan/anime/21');
 
         if (trendingData.data) {
           setTrending(trendingData.data);
