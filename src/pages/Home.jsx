@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://corsproxy.io/?
+// CORS Proxy: https://api.allorigins.win/get?url=
 import Navbar from '../components/Navbar';
 import HeroCarousel from '../components/HeroCarousel';
 import AnimeCard from '../components/AnimeCard';
@@ -15,55 +15,51 @@ export default function Home() {
   // Helper function to delay between API calls to prevent Jikan Rate Limits (3 requests/second)
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-  // Data normalization helper for Consumet API
-  const normalizeData = (results) => {
-    if (!results) return [];
-    return results.map(item => ({
-      mal_id: item.id, 
-      title: typeof item.title === 'object' ? (item.title.english || item.title.romaji || item.title.native) : item.title,
-      images: { webp: { large_image_url: item.image } },
-      episodes: item.episodeNumber || item.episodeCount || '?',
-      type: item.type || 'TV',
-      score: item.score || 'N/A'
-    }));
-  };
-
   useEffect(() => {
     const fetchAnimeData = async () => {
       try {
         setLoading(true);
-        const CONSUMET_BASE = 'https://consumet-api.herokuapp.com/anime/gogoanime';
         
-        // Helper for proxied fetch
+        // Helper for AllOrigins JSON wrapper proxied fetch
         const proxiedFetch = async (url) => {
-           const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(url));
-           return await res.json();
+           const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+           const data = await res.json();
+           return JSON.parse(data.contents);
         }
 
-        // 1. Fetch Trending (Top Airing)
-        const trendingData = await proxiedFetch(`${CONSUMET_BASE}/top-airing`);
-        
-        // 2. Fetch Popular (Top Anime for Sidebar)
-        const popularData = await proxiedFetch(`${CONSUMET_BASE}/popular`);
-        
-        // 3. Fetch Recent Episodes
-        const recentData = await proxiedFetch(`${CONSUMET_BASE}/recent-episodes`);
+        // 1. Fetch Trending currently airing anime
+        const trendingData = await proxiedFetch('https://api.jikan.moe/v4/top/anime?filter=airing&limit=10');
+        await delay(500); // delay to respect rate limit
 
-        if (trendingData.results) {
-          const normTrending = normalizeData(trendingData.results);
-          setTrending(normTrending);
-          setHero(normTrending[0]);
+        // 2. Fetch Top Anime Overall for the Rankings Sidebar
+        const topData = await proxiedFetch('https://api.jikan.moe/v4/top/anime?limit=10');
+        await delay(500);
+
+        // 3. Fetch current season anime for "Recently Updated"
+        const recentData = await proxiedFetch('https://api.jikan.moe/v4/seasons/now?limit=8');
+        await delay(500);
+        
+        // 4. Fetch One Piece explicitly for Hero
+        const opData = await proxiedFetch('https://api.jikan.moe/v4/anime/21');
+
+        if (trendingData.data) {
+          setTrending(trendingData.data);
+          setHero(trendingData.data[0]);
         }
         
-        if (popularData.results) {
-          setTop(normalizeData(popularData.results));
+        if (opData.data) {
+          setHero(opData.data);
         }
         
-        if (recentData.results) {
-          setRecentlyUpdated(normalizeData(recentData.results));
+        if (topData.data) {
+          setTop(topData.data);
+        }
+        
+        if (recentData.data) {
+          setRecentlyUpdated(recentData.data);
         }
       } catch (error) {
-        console.error("Error fetching anime data from Consumet:", error);
+        console.error("Error fetching anime data from Jikan:", error);
       } finally {
         setLoading(false);
       }

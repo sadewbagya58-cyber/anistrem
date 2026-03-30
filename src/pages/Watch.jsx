@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// CORS Proxy: https://corsproxy.io/?
+// CORS Proxy: https://api.allorigins.win/get?url=
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
@@ -33,9 +33,10 @@ export default function Watch() {
     try {
       const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
       console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
-      const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(externalUrl));
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(externalUrl)}`);
       const data = await res.json();
-      const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
+      const parsed = JSON.parse(data.contents);
+      const tmdbLink = parsed.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
       if (tmdbLink) {
         const match = tmdbLink.url.match(/\/(tv|movie)\/(\d+)/);
         if (match && match[2]) {
@@ -65,9 +66,10 @@ export default function Watch() {
     const safeProxyFetch = async (url) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${url}`);
-        const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(url));
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
         if (!res.ok) throw new Error("Proxy fetch failed");
-        return await res.json();
+        const data = await res.json();
+        return JSON.parse(data.contents);
       } catch (err) {
         console.warn("Proxy fetch error:", err);
         return null;
@@ -157,32 +159,36 @@ export default function Watch() {
         if (isNumeric) {
           // Fetch from Jikan (numeric ID)
           const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
-          const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(jikanUrl));
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(jikanUrl)}`);
           const data = await res.json();
-          metadata = data.data;
+          const parsed = JSON.parse(data.contents);
+          metadata = parsed.data;
         } else {
           // Fetch from Consumet (Slug ID)
           const consumetUrl = `https://consumet-api.herokuapp.com/anime/gogoanime/info/${id}`;
-          const res = await fetch(`https://corsproxy.io/?` + encodeURIComponent(consumetUrl));
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(consumetUrl)}`);
           const data = await res.json();
+          const parsed = JSON.parse(data.contents);
+          const consumetData = parsed;
+          
           // Normalize Consumet info to match Jikan-like structure
           metadata = {
-            mal_id: data.id,
-            title: typeof data.title === 'object' ? (data.title.english || data.title.romaji || data.title.native) : data.title,
-            images: { webp: { large_image_url: data.image } },
-            episodes: data.totalEpisodes || data.episodes?.length || '?',
-            type: data.type || 'TV',
-            score: data.score || 'N/A',
-            rating: data.rating || 'N/A',
-            synopsis: data.description || '',
-            genres: data.genres?.map((g, i) => ({ mal_id: i, name: g })),
-            status: data.status || 'Unknown',
-            trailer: { embed_url: data.trailer?.embed_url }
+            mal_id: consumetData.id,
+            title: typeof consumetData.title === 'object' ? (consumetData.title.english || consumetData.title.romaji || consumetData.title.native) : consumetData.title,
+            images: { webp: { large_image_url: consumetData.image } },
+            episodes: consumetData.totalEpisodes || consumetData.episodes?.length || '?',
+            type: consumetData.type || 'TV',
+            score: consumetData.score || 'N/A',
+            rating: consumetData.rating || 'N/A',
+            synopsis: consumetData.description || '',
+            genres: consumetData.genres?.map((g, i) => ({ mal_id: i, name: g })),
+            status: consumetData.status || 'Unknown',
+            trailer: { embed_url: consumetData.trailer?.embed_url }
           };
 
           // If Consumet info has real episode data, use it
-          if (data.episodes) {
-             setEpisodes(data.episodes.map(e => ({ num: e.number, title: `Episode ${e.number}`, id: e.id })));
+          if (consumetData.episodes) {
+             setEpisodes(consumetData.episodes.map(e => ({ num: e.number, title: `Episode ${e.number}`, id: e.id })));
           }
         }
         
