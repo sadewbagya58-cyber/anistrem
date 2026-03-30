@@ -5,6 +5,12 @@
     Access-Control-Allow-Origin = "*"
 
 [[redirects]]
+  from = "/consumet/*"
+  to = "https://consumet.vercel.app/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/jikan/*"
   to = "https://api.jikan.moe/v4/:splat"
   status = 200

@@ -21,6 +21,7 @@ export default function Watch() {
   const [retryInput, setRetryInput] = useState('');
   const [renderMode, setRenderMode] = useState('fetching'); // 'fetching', 'consumet', 'iframe', 'trailer', 'custom'
   const [tmdbId, setTmdbId] = useState(null);
+  const [proxyError, setProxyError] = useState(false);
 
   const SERVERS = {
     vidsrc_xyz: (id, ep) => `https://vidsrc.xyz/embed/anime/${id}/${ep}`,
@@ -65,12 +66,23 @@ export default function Watch() {
     const safeProxyFetch = async (path) => {
       try {
         console.log(`[Diagnostic] Connecting to server... ${path}`);
-        // Call the Netlify Serverless Proxy Function
-        const res = await fetch(`/.netlify/functions/consumet?path=${encodeURIComponent(path)}`);
-        if (!res.ok) throw new Error("Proxy fetch failed");
+        // Call the Netlify Redirect Rewrite
+        const res = await fetch(`/consumet${path}`);
+        
+        // Robust JSON verification logic
+        const contentType = res.headers.get("content-type");
+        if (!res.ok || !contentType || !contentType.includes("application/json")) {
+           const rawText = await res.text();
+           if (!rawText.trim().startsWith('{') && !rawText.trim().startsWith('[')) {
+              throw new Error("Invalid JSON response from proxy");
+           }
+        }
+        
         return await res.json();
       } catch (err) {
         console.warn("Proxy fetch error:", err);
+        setProxyError(true);
+        setFetchStatus('Server Busy');
         return null;
       }
     };
@@ -162,9 +174,16 @@ export default function Watch() {
           const data = await res.json();
           metadata = data.data;
         } else {
-          // Fetch from Consumet via Serverless Proxy
-          const consumetUrl = `/.netlify/functions/consumet?path=${encodeURIComponent(`/anime/gogoanime/info/${id}`)}`;
+          // Fetch from Consumet via Redirect
+          const consumetUrl = `/consumet/anime/gogoanime/info/${id}`;
           const res = await fetch(consumetUrl);
+          
+          const contentType = res.headers.get("content-type");
+          if (!res.ok || !contentType || !contentType.includes("application/json")) {
+             setProxyError(true);
+             throw new Error("Proxy returned HTML/Error instead of JSON");
+          }
+
           const data = await res.json();
           const consumetData = data;
           
@@ -249,9 +268,25 @@ export default function Watch() {
               {/* Loading Overlay */}
               {renderMode === 'fetching' && (
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black transition-all duration-300">
-                  <Loader2 className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
-                  <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse mb-2">{fetchStatus}</span>
-                  <span className="text-xs text-text-muted">Analyzing multiple providers...</span>
+                  {proxyError ? (
+                    <>
+                      <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                      <span className="text-sm font-bold text-red-500 tracking-widest mb-2 uppercase">Server Busy</span>
+                      <span className="text-xs text-text-muted px-8 text-center leading-relaxed">The traffic is currently too high. Please try switching servers or refresh in a few minutes.</span>
+                      <button 
+                        onClick={() => window.location.reload()}
+                        className="mt-6 px-6 py-2 bg-surface hover:bg-surface-hover text-white text-xs font-bold rounded-full border border-white/10 transition-all uppercase tracking-tighter"
+                      >
+                        Try Refresh
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
+                      <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse mb-2">{fetchStatus}</span>
+                      <span className="text-xs text-text-muted">Analyzing multiple providers...</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -261,7 +296,8 @@ export default function Watch() {
                     title={`Trailer for ${title}`}
                     src={`${anime.trailer.embed_url}&autoplay=1`}
                     className="w-full h-full border-0 absolute inset-0 bg-black"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; full-screen"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                    sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation"
                     referrerPolicy="origin"
                     allowFullScreen
                   ></iframe>
@@ -295,6 +331,8 @@ export default function Watch() {
                   title={`Episode ${activeEpisode} Backup Embed`}
                   src={activeEmbedUrl}
                   className="w-full h-full border-0 absolute inset-0 bg-black"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation"
                   allowFullScreen
                 ></iframe>
               ) : renderMode === 'consumet' && streamUrl ? (
