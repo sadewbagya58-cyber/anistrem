@@ -10,33 +10,41 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('embtaku'); // 'embtaku', 's3taku', 'trailer', 'custom'
+  const [videoServer, setVideoServer] = useState('hianime'); // 'hianime', 'vidsrc_cc', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
   const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'iframe', 'trailer', 'custom', 'error'
   const [gogoSlug, setGogoSlug] = useState(null);
   const [mappingError, setMappingError] = useState(false);
 
-  // Embed host domains for Gogoanime - fallback chain
+  // Embed services - using the Zoro/HiAnime identifier from MAL-Sync
   const EMBED_HOSTS = {
-    embtaku: (slug, ep) => `https://embtaku.pro/streaming.php?id=${slug}-episode-${ep}`,
-    s3taku: (slug, ep) => `https://s3taku.com/streaming.php?id=${slug}-episode-${ep}`
+    hianime: (zoroId, ep) => `https://vidsrc.icu/embed/anime/${zoroId}/${ep}`,
+    vidsrc_cc: (zoroId, ep) => `https://vidsrc.cc/v2/embed/anime/${zoroId}/${ep}`
   };
 
-  // Fetch the Gogoanime slug from MAL-Sync API
-  const fetchGogoSlug = async (malId) => {
+  // Fetch the Zoro/HiAnime identifier from MAL-Sync API
+  const fetchStreamId = async (malId) => {
     try {
       console.log(`[MAL-Sync] Fetching mapping for MAL ID: ${malId}`);
       const res = await fetch(`/malsync/mal/anime/${malId}`);
       if (!res.ok) throw new Error(`MAL-Sync returned ${res.status}`);
       const data = await res.json();
       const sites = data.Sites;
-      const slug = sites?.Gogoanime ? Object.keys(sites.Gogoanime)[0] : null;
-      if (slug) {
-        console.log(`[MAL-Sync] Resolved Gogoanime slug: ${slug}`);
-        return slug;
+
+      // Try Zoro first (hianime.to) — most reliable
+      if (sites?.Zoro) {
+        const zoroKey = Object.keys(sites.Zoro)[0];
+        const zoroData = sites.Zoro[zoroKey];
+        if (zoroData) {
+          console.log(`[MAL-Sync] Resolved Zoro ID: ${zoroKey}, URL: ${zoroData.url}`);
+          return { id: zoroKey, provider: 'zoro' };
+        }
       }
-      console.warn('[MAL-Sync] No Gogoanime mapping found in response');
+
+      // Fallback: use MAL ID directly with vidsrc
+      console.warn('[MAL-Sync] No Zoro mapping, falling back to MAL ID');
+      return { id: malId, provider: 'mal_fallback' };
     } catch (e) {
       console.error('[MAL-Sync] Mapping failed:', e.message);
     }
@@ -52,7 +60,7 @@ export default function Watch() {
       return;
     }
 
-    // For Gogoanime embed servers
+    // For embed servers
     if (gogoSlug && EMBED_HOSTS[videoServer]) {
       const url = EMBED_HOSTS[videoServer](gogoSlug, activeEpisode);
       console.log(`[Player] Embed URL: ${url}`);
@@ -89,10 +97,11 @@ export default function Watch() {
             title: `Episode ${i + 1}`
           })));
 
-          // 2. Resolve Gogoanime slug via MAL-Sync
-          const slug = await fetchGogoSlug(id);
-          if (slug) {
-            setGogoSlug(slug);
+          // 2. Resolve stream ID via MAL-Sync
+          const result = await fetchStreamId(id);
+          if (result) {
+            setGogoSlug(result.id);
+            console.log(`[MAL-Sync] Using ${result.provider} with ID: ${result.id}`);
           } else {
             setMappingError(true);
           }
@@ -212,8 +221,8 @@ export default function Watch() {
                     onChange={(e) => setVideoServer(e.target.value)}
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
-                    <option value="embtaku">Server 1 - Gogoanime (Primary)</option>
-                    <option value="s3taku">Server 2 - Gogoanime (Backup)</option>
+                    <option value="hianime">Server 1 - HiAnime (Primary)</option>
+                    <option value="vidsrc_cc">Server 2 - VidSrc (Backup)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
