@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, AlertCircle } from 'lucide-react';
 
 export default function Watch() {
   const { id } = useParams();
@@ -10,55 +10,70 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('vidsrc_me'); // 'vidsrc_me', 'vidsrc_to', 'trailer', 'custom'
+  const [videoServer, setVideoServer] = useState('embtaku'); // 'embtaku', 's3taku', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
-  const [renderMode, setRenderMode] = useState('iframe'); // 'iframe', 'trailer', 'custom'
-  const [tmdbId, setTmdbId] = useState(null);
+  const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'iframe', 'trailer', 'custom', 'error'
+  const [gogoSlug, setGogoSlug] = useState(null);
+  const [mappingError, setMappingError] = useState(false);
 
-  const SERVERS = {
-    vidsrc_me: (animeId, ep) => `https://vidsrc.me/embed/anime/${animeId}/${ep}`,
-    vidsrc_to: (animeId, ep) => `https://vidsrc.to/embed/anime/${animeId}/${ep}`
+  // Embed host domains for Gogoanime - fallback chain
+  const EMBED_HOSTS = {
+    embtaku: (slug, ep) => `https://embtaku.pro/streaming.php?id=${slug}-episode-${ep}`,
+    s3taku: (slug, ep) => `https://s3taku.com/streaming.php?id=${slug}-episode-${ep}`
   };
 
-  // Resolve TMDB ID from MAL ID via Jikan external links
-  const fetchTmdbId = async (malId) => {
+  // Fetch the Gogoanime slug from MAL-Sync API
+  const fetchGogoSlug = async (malId) => {
     try {
-      const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/external`);
+      console.log(`[MAL-Sync] Fetching mapping for MAL ID: ${malId}`);
+      const res = await fetch(`https://api.malsync.moe/mal/anime/${malId}`);
+      if (!res.ok) throw new Error(`MAL-Sync returned ${res.status}`);
       const data = await res.json();
-      const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
-      if (tmdbLink) {
-        const match = tmdbLink.url.match(/\/(tv|movie)\/(\d+)/);
-        if (match && match[2]) {
-          console.log(`[ID Mapper] Resolved TMDB ID: ${match[2]}`);
-          return match[2];
-        }
+      const sites = data.Sites;
+      const slug = sites?.Gogoanime ? Object.keys(sites.Gogoanime)[0] : null;
+      if (slug) {
+        console.log(`[MAL-Sync] Resolved Gogoanime slug: ${slug}`);
+        return slug;
       }
+      console.warn('[MAL-Sync] No Gogoanime mapping found in response');
     } catch (e) {
-      console.warn("[ID Mapper] External mapping failed");
+      console.error('[MAL-Sync] Mapping failed:', e.message);
     }
     return null;
   };
 
-  // Generate iframe URL when server, episode, or anime changes
+  // Generate iframe URL when server, episode, or slug changes
   useEffect(() => {
     if (!anime) return;
-    const currentId = tmdbId || id;
 
-    if (videoServer === 'vidsrc_me' || videoServer === 'vidsrc_to') {
-      const getUrl = SERVERS[videoServer];
-      setActiveEmbedUrl(getUrl(currentId, activeEpisode));
-      setRenderMode('iframe');
-    } else {
-      setRenderMode(videoServer); // 'trailer' or 'custom'
+    if (videoServer === 'trailer' || videoServer === 'custom') {
+      setRenderMode(videoServer);
+      return;
     }
-  }, [activeEpisode, videoServer, anime, id, tmdbId]);
 
-  // Fetch anime metadata from Jikan (MAL)
+    // For Gogoanime embed servers
+    if (gogoSlug && EMBED_HOSTS[videoServer]) {
+      const url = EMBED_HOSTS[videoServer](gogoSlug, activeEpisode);
+      console.log(`[Player] Embed URL: ${url}`);
+      setActiveEmbedUrl(url);
+      setRenderMode('iframe');
+    } else if (!gogoSlug && !mappingError) {
+      setRenderMode('loading');
+    } else {
+      setRenderMode('error');
+    }
+  }, [activeEpisode, videoServer, anime, gogoSlug, mappingError]);
+
+  // Fetch anime metadata from Jikan + Gogoanime slug from MAL-Sync
   useEffect(() => {
     const fetchWatchData = async () => {
       try {
         setLoading(true);
+        setMappingError(false);
+        setGogoSlug(null);
+
+        // 1. Fetch metadata from Jikan (MAL) - supports CORS natively
         const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
         const res = await fetch(jikanUrl);
         const data = await res.json();
@@ -74,9 +89,13 @@ export default function Watch() {
             title: `Episode ${i + 1}`
           })));
 
-          // Resolve TMDB ID for accurate VidSrc lookups
-          const resolvedTmdb = await fetchTmdbId(id);
-          if (resolvedTmdb) setTmdbId(resolvedTmdb);
+          // 2. Resolve Gogoanime slug via MAL-Sync
+          const slug = await fetchGogoSlug(id);
+          if (slug) {
+            setGogoSlug(slug);
+          } else {
+            setMappingError(true);
+          }
         }
       } catch (error) {
         console.error("Error fetching watch data:", error);
@@ -118,6 +137,23 @@ export default function Watch() {
           <div className="flex-1 lg:w-3/4 flex flex-col min-w-0">
             {/* 16:9 Video Player */}
             <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-white/5 relative shadow-2xl">
+
+              {/* Loading state while resolving MAL-Sync slug */}
+              {renderMode === 'loading' && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
+                  <Loader2 className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
+                  <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse">Resolving Stream...</span>
+                </div>
+              )}
+
+              {/* Error state if MAL-Sync mapping failed */}
+              {renderMode === 'error' && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
+                  <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                  <span className="text-sm font-bold text-red-500 tracking-widest mb-2 uppercase">Stream Unavailable</span>
+                  <span className="text-xs text-text-muted px-8 text-center leading-relaxed">Could not find a Gogoanime mapping for this anime. Try the Trailer or Custom URL.</span>
+                </div>
+              )}
 
               {renderMode === 'trailer' ? (
                  anime.trailer?.embed_url ? (
@@ -176,8 +212,8 @@ export default function Watch() {
                     onChange={(e) => setVideoServer(e.target.value)}
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
-                    <option value="vidsrc_me">Server 1 - VidSrc.me (Primary)</option>
-                    <option value="vidsrc_to">Server 2 - VidSrc.to (Backup)</option>
+                    <option value="embtaku">Server 1 - Gogoanime (Primary)</option>
+                    <option value="s3taku">Server 2 - Gogoanime (Backup)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
