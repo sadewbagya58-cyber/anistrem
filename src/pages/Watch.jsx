@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-// Jikan API natively supports CORS; Consumet requires Netlify Rewrites
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
-import { Play, Loader2, AlertCircle } from 'lucide-react';
+import { Play, Loader2 } from 'lucide-react';
 
 export default function Watch() {
   const { id } = useParams();
@@ -11,236 +10,73 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('vidsrc_xyz'); // 'native', 'vidsrc_xyz', 'vidsrc_to', 'vidsrc_cc', 'multiembed', 'trailer', 'custom'
-  const [streamUrl, setStreamUrl] = useState('');
+  const [videoServer, setVideoServer] = useState('vidsrc_me'); // 'vidsrc_me', 'vidsrc_to', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
-  const [fetchStatus, setFetchStatus] = useState('Ready'); 
-  const [hasError, setHasError] = useState(false);
-  const [customSearchQuery, setCustomSearchQuery] = useState('');
-  const [retryInput, setRetryInput] = useState('');
-  const [renderMode, setRenderMode] = useState('fetching'); // 'fetching', 'consumet', 'iframe', 'trailer', 'custom'
+  const [renderMode, setRenderMode] = useState('iframe'); // 'iframe', 'trailer', 'custom'
   const [tmdbId, setTmdbId] = useState(null);
-  const [proxyError, setProxyError] = useState(false);
-  const PROXIES = ['/proxy1', '/proxy2', '/consumet'];
 
   const SERVERS = {
-    vidsrc_xyz: (id, ep) => `https://vidsrc.xyz/embed/anime/${id}/${ep}`,
-    vidsrc_to: (id, ep) => `https://vidsrc.to/embed/anime/${id}/${ep}`,
-    vidsrc_cc: (id, ep) => `https://vidsrc.cc/v2/embed/anime/${id}/${ep}`,
-    multiembed: (id, ep) => `https://multiembed.mov/?video_id=${id}&tmdb=1`
+    vidsrc_me: (animeId, ep) => `https://vidsrc.me/embed/anime/${animeId}/${ep}`,
+    vidsrc_to: (animeId, ep) => `https://vidsrc.to/embed/anime/${animeId}/${ep}`
   };
 
+  // Resolve TMDB ID from MAL ID via Jikan external links
   const fetchTmdbId = async (malId) => {
     try {
-      const externalUrl = `https://api.jikan.moe/v4/anime/${malId}/external`;
-      console.log(`[Diagnostic] Connecting to server... ${externalUrl}`);
-      const res = await fetch(externalUrl);
+      const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/external`);
       const data = await res.json();
       const tmdbLink = data.data?.find(link => link.name.toLowerCase().includes('themoviedb'));
       if (tmdbLink) {
         const match = tmdbLink.url.match(/\/(tv|movie)\/(\d+)/);
         if (match && match[2]) {
-          console.log(`[ID Mapper] Successfully resolved TMDB ID: ${match[2]}`);
+          console.log(`[ID Mapper] Resolved TMDB ID: ${match[2]}`);
           return match[2];
         }
       }
     } catch (e) {
-      console.warn("[ID Mapper] External mapping failed, falling back to Title/MAL ID");
+      console.warn("[ID Mapper] External mapping failed");
     }
     return null;
   };
 
-  // Reset retry input on anime change
+  // Generate iframe URL when server, episode, or anime changes
   useEffect(() => {
-    if (anime) {
-      setCustomSearchQuery('');
-      setRetryInput(anime.title_english || anime.title);
-    }
-  }, [anime]);
-
-  // Multi-Server Iframe & Native Engine
-  useEffect(() => {
-    let isMounted = true;
     if (!anime) return;
+    const currentId = tmdbId || id;
 
-    const safeProxyFetch = async (path) => {
-      for (const proxy of PROXIES) {
-        try {
-          console.log(`[Diagnostic] Connecting to server... ${proxy}${path}`);
-          // Call the Netlify Redirect Rewrite
-          const res = await fetch(`${proxy}${path}`);
-          
-          // Robust JSON verification logic
-          const contentType = res.headers.get("content-type");
-          if (!res.ok || !contentType || !contentType.includes("application/json")) {
-             const rawText = await res.text();
-             if (!rawText.trim().startsWith('{') && !rawText.trim().startsWith('[')) {
-                throw new Error("Invalid JSON response from proxy " + proxy);
-             }
-          }
-          
-          return await res.json();
-        } catch (err) {
-          console.warn(`Proxy ${proxy} failed:`, err.message);
-          continue; // Try next proxy
-        }
-      }
-
-      // If all proxies fail
-      setProxyError(true);
-      setFetchStatus('Server Busy');
-      return null;
-    };
-
-    const fetchNativeStream = async () => {
-      setRenderMode('fetching');
-      setFetchStatus('Fetching Native Stream...');
-      
-      const PROVIDERS = ['gogoanime', 'zoro', 'enime'];
-      const titleStr = anime.title_english || anime.title;
-      const query = encodeURIComponent(titleStr.replace(/[^a-zA-Z0-9 ]/g, ""));
-
-      for (const provider of PROVIDERS) {
-        if (!isMounted) break;
-        try {
-          // Search via Serverless Proxy
-          const searchData = await safeProxyFetch(`/anime/${provider}/${query}`);
-          if (!searchData || !searchData.results?.length) continue;
-          
-          const slugId = searchData.results[0].id;
-          
-          // Info via Serverless Proxy
-          const infoData = await safeProxyFetch(`/anime/${provider}/info/${slugId}`);
-          if (!infoData || !infoData.episodes) continue;
-          
-          const epData = infoData.episodes.find(e => Number(e.number) === activeEpisode);
-          if (!epData) continue;
-          
-          // Stream via Serverless Proxy
-          const streamData = await safeProxyFetch(`/anime/${provider}/watch/${epData.id}`);
-          if (!streamData || !streamData.sources?.length) continue;
-          
-          const bestSource = streamData.sources.find(s => s.quality === '1080p') || streamData.sources.find(s => s.quality === 'auto') || streamData.sources[0];
-          
-          if (bestSource) {
-            setStreamUrl(bestSource.url);
-            setRenderMode('consumet');
-            return true;
-          }
-        } catch (err) {
-          console.warn(`Provider ${provider} failed:`, err);
-        }
-      }
-      return false;
-    };
-
-    const initPlayer = async () => {
-      const titleStr = anime.title_english || anime.title;
-      const cleanTitle = titleStr.replace(/[^a-zA-Z0-9 ]/g, "").split(':')[0].split('-')[0].trim();
-      const currentId = tmdbId || id;
-
-      if (videoServer === 'native') {
-        const success = await fetchNativeStream();
-        if (!success && isMounted) {
-          // Fallback to MultiEmbed with Title search if native fails
-          setActiveEmbedUrl(`https://multiembed.mov/?video_id=${encodeURIComponent(cleanTitle)}&tmdb=1`);
-          setRenderMode('iframe');
-        }
-      } else if (videoServer.startsWith('vidsrc')) {
-        const getUrl = SERVERS[videoServer];
-        if (getUrl) {
-          setActiveEmbedUrl(getUrl(currentId, activeEpisode));
-          setRenderMode('iframe');
-        }
-      } else if (videoServer === 'multiembed') {
-        // MultiEmbed handles both ID and Title gracefully
-        setActiveEmbedUrl(`https://multiembed.mov/?video_id=${currentId}&tmdb=1`);
-        setRenderMode('iframe');
-      } else {
-        setRenderMode(videoServer);
-      }
-    };
-
-    initPlayer();
-    return () => { isMounted = false; };
+    if (videoServer === 'vidsrc_me' || videoServer === 'vidsrc_to') {
+      const getUrl = SERVERS[videoServer];
+      setActiveEmbedUrl(getUrl(currentId, activeEpisode));
+      setRenderMode('iframe');
+    } else {
+      setRenderMode(videoServer); // 'trailer' or 'custom'
+    }
   }, [activeEpisode, videoServer, anime, id, tmdbId]);
 
+  // Fetch anime metadata from Jikan (MAL)
   useEffect(() => {
     const fetchWatchData = async () => {
       try {
         setLoading(true);
-        const isNumeric = /^\d+$/.test(id);
-        let metadata = null;
+        const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
+        const res = await fetch(jikanUrl);
+        const data = await res.json();
+        const metadata = data.data;
 
-        if (isNumeric) {
-          // Fetch from Jikan directly (supports CORS)
-          const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
-          const res = await fetch(jikanUrl);
-          const data = await res.json();
-          metadata = data.data;
-        } else {
-          // Fetch from Consumet via Redirect with Failover
-          let consumetData = null;
-          for (const proxy of PROXIES) {
-             try {
-                const consumetUrl = `${proxy}/anime/gogoanime/info/${id}`;
-                const res = await fetch(consumetUrl);
-                const contentType = res.headers.get("content-type");
-                
-                if (!res.ok || !contentType || !contentType.includes("application/json")) {
-                   throw new Error("Proxy " + proxy + " returned HTML/Error instead of JSON");
-                }
-                
-                consumetData = await res.json();
-                break; // Success
-             } catch (err) {
-                console.warn(`Initial fetch via ${proxy} failed:`, err.message);
-                continue;
-             }
-          }
-
-          if (!consumetData) {
-             setProxyError(true);
-             throw new Error("All proxies failed for initial metadata fetch.");
-          }
-          
-          // Normalize Consumet info to match Jikan-like structure
-          metadata = {
-            mal_id: consumetData.id,
-            title: typeof consumetData.title === 'object' ? (consumetData.title.english || consumetData.title.romaji || consumetData.title.native) : consumetData.title,
-            images: { webp: { large_image_url: consumetData.image } },
-            episodes: consumetData.totalEpisodes || consumetData.episodes?.length || '?',
-            type: consumetData.type || 'TV',
-            score: consumetData.score || 'N/A',
-            rating: consumetData.rating || 'N/A',
-            synopsis: consumetData.description || '',
-            genres: consumetData.genres?.map((g, i) => ({ mal_id: i, name: g })),
-            status: consumetData.status || 'Unknown',
-            trailer: { embed_url: consumetData.trailer?.embed_url }
-          };
-
-          // If Consumet info has real episode data, use it
-          if (consumetData.episodes) {
-             setEpisodes(consumetData.episodes.map(e => ({ num: e.number, title: `Episode ${e.number}`, id: e.id })));
-          }
-        }
-        
         if (metadata) {
           setAnime(metadata);
-          
-          if (isNumeric) {
-             // Generate dummy episodes for Jikan (kept from original logic)
-             const totalEp = metadata.episodes || 24;
-             setEpisodes(Array.from({ length: totalEp }, (_, i) => ({
-               num: i + 1,
-               title: `Episode ${i + 1}`
-             })));
 
-             // Resolve TMDB ID for Jikan numeric IDs
-             const resolvedTmdb = await fetchTmdbId(id);
-             if (resolvedTmdb) setTmdbId(resolvedTmdb);
-          }
+          // Generate episode list
+          const totalEp = metadata.episodes || 24;
+          setEpisodes(Array.from({ length: totalEp }, (_, i) => ({
+            num: i + 1,
+            title: `Episode ${i + 1}`
+          })));
+
+          // Resolve TMDB ID for accurate VidSrc lookups
+          const resolvedTmdb = await fetchTmdbId(id);
+          if (resolvedTmdb) setTmdbId(resolvedTmdb);
         }
       } catch (error) {
         console.error("Error fetching watch data:", error);
@@ -248,7 +84,7 @@ export default function Watch() {
         setLoading(false);
       }
     };
-    
+
     fetchWatchData();
   }, [id]);
 
@@ -280,33 +116,8 @@ export default function Watch() {
         <div className="flex flex-col lg:flex-row gap-6 flex-1">
           {/* Main Player Section (Left Side) */}
           <div className="flex-1 lg:w-3/4 flex flex-col min-w-0">
-            {/* 16:9 Video Player Embedded IFRAME */}
+            {/* 16:9 Video Player */}
             <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-white/5 relative shadow-2xl">
-              {/* Optional Loading and Error Overlay States */}
-              {/* Loading Overlay */}
-              {renderMode === 'fetching' && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black transition-all duration-300">
-                  {proxyError ? (
-                    <>
-                      <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                      <span className="text-sm font-bold text-red-500 tracking-widest mb-2 uppercase">Server Busy</span>
-                      <span className="text-xs text-text-muted px-8 text-center leading-relaxed">The traffic is currently too high. Please try switching servers or refresh in a few minutes.</span>
-                      <button 
-                        onClick={() => window.location.reload()}
-                        className="mt-6 px-6 py-2 bg-surface hover:bg-surface-hover text-white text-xs font-bold rounded-full border border-white/10 transition-all uppercase tracking-tighter"
-                      >
-                        Try Refresh
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
-                      <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse mb-2">{fetchStatus}</span>
-                      <span className="text-xs text-text-muted">Analyzing multiple providers...</span>
-                    </>
-                  )}
-                </div>
-              )}
 
               {renderMode === 'trailer' ? (
                  anime.trailer?.embed_url ? (
@@ -343,28 +154,16 @@ export default function Watch() {
                   </div>
                 )
               ) : renderMode === 'iframe' && activeEmbedUrl ? (
-                // Backup Iframe Player
                 <iframe
-                  key={`${id}-${activeEpisode}-iframe-${activeEmbedUrl}`}
-                  title={`Episode ${activeEpisode} Backup Embed`}
+                  key={`${id}-${activeEpisode}-${videoServer}-${activeEmbedUrl}`}
+                  title={`${title} - Episode ${activeEpisode}`}
                   src={activeEmbedUrl}
                   className="w-full h-full border-0 absolute inset-0 bg-black"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-downloads allow-modals"
+                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation allow-downloads allow-modals"
                   referrerPolicy="no-referrer"
                   allowFullScreen
                 ></iframe>
-              ) : renderMode === 'consumet' && streamUrl ? (
-                // Native Consumet HLS Player
-                <ReactPlayer 
-                    url={streamUrl}
-                    controls
-                    playing
-                    width="100%"
-                    height="100%"
-                    className="absolute inset-0 bg-black"
-                    config={{ file: { forceHLS: true } }}
-                />
               ) : null}
             </div>
 
@@ -377,10 +176,8 @@ export default function Watch() {
                     onChange={(e) => setVideoServer(e.target.value)}
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
-                    <option value="vidsrc_xyz">Server 1 (High Quality)</option>
-                    <option value="vidsrc_to">Server 2 (Fast)</option>
-                    <option value="native">Server 3 (Native Player - Gogoanime)</option>
-                    <option value="multiembed">Server 4 (Backup - MultiEmbed)</option>
+                    <option value="vidsrc_me">Server 1 - VidSrc.me (Primary)</option>
+                    <option value="vidsrc_to">Server 2 - VidSrc.to (Backup)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
