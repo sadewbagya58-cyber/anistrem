@@ -27,7 +27,7 @@ export default function Watch() {
   const fetchGogoSlug = async (malId) => {
     try {
       console.log(`[MAL-Sync] Fetching mapping for MAL ID: ${malId}`);
-      const res = await fetch(`https://api.malsync.moe/mal/anime/${malId}`);
+      const res = await fetch(`/malsync/mal/anime/${malId}`);
       if (!res.ok) throw new Error(`MAL-Sync returned ${res.status}`);
       const data = await res.json();
       const sites = data.Sites;
