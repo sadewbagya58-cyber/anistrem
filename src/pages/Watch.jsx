@@ -22,6 +22,7 @@ export default function Watch() {
   const [renderMode, setRenderMode] = useState('fetching'); // 'fetching', 'consumet', 'iframe', 'trailer', 'custom'
   const [tmdbId, setTmdbId] = useState(null);
   const [proxyError, setProxyError] = useState(false);
+  const PROXIES = ['/proxy1', '/proxy2', '/consumet'];
 
   const SERVERS = {
     vidsrc_xyz: (id, ep) => `https://vidsrc.xyz/embed/anime/${id}/${ep}`,
@@ -64,27 +65,32 @@ export default function Watch() {
     if (!anime) return;
 
     const safeProxyFetch = async (path) => {
-      try {
-        console.log(`[Diagnostic] Connecting to server... ${path}`);
-        // Call the Netlify Redirect Rewrite
-        const res = await fetch(`/consumet${path}`);
-        
-        // Robust JSON verification logic
-        const contentType = res.headers.get("content-type");
-        if (!res.ok || !contentType || !contentType.includes("application/json")) {
-           const rawText = await res.text();
-           if (!rawText.trim().startsWith('{') && !rawText.trim().startsWith('[')) {
-              throw new Error("Invalid JSON response from proxy");
-           }
+      for (const proxy of PROXIES) {
+        try {
+          console.log(`[Diagnostic] Connecting to server... ${proxy}${path}`);
+          // Call the Netlify Redirect Rewrite
+          const res = await fetch(`${proxy}${path}`);
+          
+          // Robust JSON verification logic
+          const contentType = res.headers.get("content-type");
+          if (!res.ok || !contentType || !contentType.includes("application/json")) {
+             const rawText = await res.text();
+             if (!rawText.trim().startsWith('{') && !rawText.trim().startsWith('[')) {
+                throw new Error("Invalid JSON response from proxy " + proxy);
+             }
+          }
+          
+          return await res.json();
+        } catch (err) {
+          console.warn(`Proxy ${proxy} failed:`, err.message);
+          continue; // Try next proxy
         }
-        
-        return await res.json();
-      } catch (err) {
-        console.warn("Proxy fetch error:", err);
-        setProxyError(true);
-        setFetchStatus('Server Busy');
-        return null;
       }
+
+      // If all proxies fail
+      setProxyError(true);
+      setFetchStatus('Server Busy');
+      return null;
     };
 
     const fetchNativeStream = async () => {
@@ -174,18 +180,30 @@ export default function Watch() {
           const data = await res.json();
           metadata = data.data;
         } else {
-          // Fetch from Consumet via Redirect
-          const consumetUrl = `/consumet/anime/gogoanime/info/${id}`;
-          const res = await fetch(consumetUrl);
-          
-          const contentType = res.headers.get("content-type");
-          if (!res.ok || !contentType || !contentType.includes("application/json")) {
-             setProxyError(true);
-             throw new Error("Proxy returned HTML/Error instead of JSON");
+          // Fetch from Consumet via Redirect with Failover
+          let consumetData = null;
+          for (const proxy of PROXIES) {
+             try {
+                const consumetUrl = `${proxy}/anime/gogoanime/info/${id}`;
+                const res = await fetch(consumetUrl);
+                const contentType = res.headers.get("content-type");
+                
+                if (!res.ok || !contentType || !contentType.includes("application/json")) {
+                   throw new Error("Proxy " + proxy + " returned HTML/Error instead of JSON");
+                }
+                
+                consumetData = await res.json();
+                break; // Success
+             } catch (err) {
+                console.warn(`Initial fetch via ${proxy} failed:`, err.message);
+                continue;
+             }
           }
 
-          const data = await res.json();
-          const consumetData = data;
+          if (!consumetData) {
+             setProxyError(true);
+             throw new Error("All proxies failed for initial metadata fetch.");
+          }
           
           // Normalize Consumet info to match Jikan-like structure
           metadata = {
@@ -297,8 +315,8 @@ export default function Watch() {
                     src={`${anime.trailer.embed_url}&autoplay=1`}
                     className="w-full h-full border-0 absolute inset-0 bg-black"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                    sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation"
-                    referrerPolicy="origin"
+                    sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation allow-downloads allow-modals"
+                    referrerPolicy="no-referrer"
                     allowFullScreen
                   ></iframe>
                  ) : (
@@ -332,7 +350,8 @@ export default function Watch() {
                   src={activeEmbedUrl}
                   className="w-full h-full border-0 absolute inset-0 bg-black"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation"
+                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-downloads allow-modals"
+                  referrerPolicy="no-referrer"
                   allowFullScreen
                 ></iframe>
               ) : renderMode === 'consumet' && streamUrl ? (

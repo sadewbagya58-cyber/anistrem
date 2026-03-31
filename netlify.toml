@@ -5,6 +5,18 @@
     Access-Control-Allow-Origin = "*"
 
 [[redirects]]
+  from = "/proxy1/*"
+  to = "https://consumet-api.herokapp.com/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/proxy2/*"
+  to = "https://api.consumet.org/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/consumet/*"
   to = "https://consumet.vercel.app/:splat"
   status = 200
