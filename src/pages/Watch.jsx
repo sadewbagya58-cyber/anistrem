@@ -10,17 +10,22 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('hianime'); // 'hianime', 'vidsrc_cc', 'trailer', 'custom'
+  const [videoServer, setVideoServer] = useState('hianime'); // 'hianime', '2embed', 'multiembed', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
   const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'iframe', 'trailer', 'custom', 'error'
   const [gogoSlug, setGogoSlug] = useState(null);
   const [mappingError, setMappingError] = useState(false);
 
-  // Embed services - using the Zoro/HiAnime identifier from MAL-Sync
-  const EMBED_HOSTS = {
-    hianime: (zoroId, ep) => `https://vidsrc.icu/embed/anime/${zoroId}/${ep}`,
-    vidsrc_cc: (zoroId, ep) => `https://vidsrc.cc/v2/embed/anime/${zoroId}/${ep}`
+  // Triple Server System
+  // Server 1: Uses Zoro ID from MAL-Sync
+  // Servers 2 & 3: Use MAL ID directly (no mapping needed)
+  const SERVERS_ZORO = {
+    hianime: (zoroId, ep) => `https://vidsrc.icu/embed/anime/${zoroId}/${ep}`
+  };
+  const SERVERS_MAL = {
+    '2embed': (malId, ep) => `https://www.2embed.cc/embedanime/${malId}`,
+    multiembed: (malId, ep) => `https://multiembed.mov/directstream.php?video_id=${malId}&tmdb=0`
   };
 
   // Fetch the Zoro/HiAnime identifier from MAL-Sync API
@@ -60,18 +65,29 @@ export default function Watch() {
       return;
     }
 
-    // For embed servers
-    if (gogoSlug && EMBED_HOSTS[videoServer]) {
-      const url = EMBED_HOSTS[videoServer](gogoSlug, activeEpisode);
-      console.log(`[Player] Embed URL: ${url}`);
+    // Zoro ID based servers (need MAL-Sync mapping)
+    if (SERVERS_ZORO[videoServer]) {
+      if (gogoSlug) {
+        const url = SERVERS_ZORO[videoServer](gogoSlug, activeEpisode);
+        console.log(`[Player] Embed URL (Zoro): ${url}`);
+        setActiveEmbedUrl(url);
+        setRenderMode('iframe');
+      } else if (!mappingError) {
+        setRenderMode('loading');
+      } else {
+        setRenderMode('error');
+      }
+      return;
+    }
+
+    // MAL ID based servers (always available, no mapping needed)
+    if (SERVERS_MAL[videoServer]) {
+      const url = SERVERS_MAL[videoServer](id, activeEpisode);
+      console.log(`[Player] Embed URL (MAL): ${url}`);
       setActiveEmbedUrl(url);
       setRenderMode('iframe');
-    } else if (!gogoSlug && !mappingError) {
-      setRenderMode('loading');
-    } else {
-      setRenderMode('error');
     }
-  }, [activeEpisode, videoServer, anime, gogoSlug, mappingError]);
+  }, [activeEpisode, videoServer, anime, gogoSlug, mappingError, id]);
 
   // Fetch anime metadata from Jikan + Gogoanime slug from MAL-Sync
   useEffect(() => {
@@ -222,7 +238,8 @@ export default function Watch() {
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
                     <option value="hianime">Server 1 - HiAnime (Primary)</option>
-                    <option value="vidsrc_cc">Server 2 - VidSrc (Backup)</option>
+                    <option value="2embed">Server 2 - 2Embed (Backup)</option>
+                    <option value="multiembed">Server 3 - MultiEmbed (Ultra-Stable)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
