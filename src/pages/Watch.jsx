@@ -18,14 +18,14 @@ export default function Watch() {
   const [mappingError, setMappingError] = useState(false);
 
   // Triple Server System
-  // Server 1: Uses Zoro ID from MAL-Sync
-  // Servers 2 & 3: Use MAL ID directly (no mapping needed)
+  // Server 1: Uses Zoro ID from MAL-Sync (best match)
+  // Server 2: Uses MAL ID directly (no mapping needed, always available)
   const SERVERS_ZORO = {
     hianime: (zoroId, ep) => `https://vidsrc.icu/embed/anime/${zoroId}/${ep}`
   };
   const SERVERS_MAL = {
-    '2embed': (malId, ep) => `https://www.2embed.cc/embedanime/${malId}`,
-    multiembed: (malId, ep) => `https://multiembed.mov/directstream.php?video_id=${malId}&tmdb=0`
+    hianime_mal: (malId, ep) => `https://vidsrc.icu/embed/anime/${malId}/${ep}`,
+    embedsu: (malId, ep) => `https://embed.su/embed/anime/${malId}/${ep}`
   };
 
   // Fetch the Zoro/HiAnime identifier from MAL-Sync API
@@ -187,7 +187,6 @@ export default function Watch() {
                     src={`${anime.trailer.embed_url}&autoplay=1`}
                     className="w-full h-full border-0 absolute inset-0 bg-black"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                    sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation allow-downloads allow-modals"
                     referrerPolicy="no-referrer"
                     allowFullScreen
                   ></iframe>
@@ -221,7 +220,6 @@ export default function Watch() {
                   src={activeEmbedUrl}
                   className="w-full h-full border-0 absolute inset-0 bg-black"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                  sandbox="allow-forms allow-pointer-lock allow-same-origin allow-scripts allow-top-navigation allow-presentation allow-downloads allow-modals"
                   referrerPolicy="no-referrer"
                   allowFullScreen
                 ></iframe>
@@ -238,8 +236,8 @@ export default function Watch() {
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
                     <option value="hianime">Server 1 - HiAnime (Primary)</option>
-                    <option value="2embed">Server 2 - 2Embed (Backup)</option>
-                    <option value="multiembed">Server 3 - MultiEmbed (Ultra-Stable)</option>
+                    <option value="hianime_mal">Server 2 - HiAnime via MAL ID</option>
+                    <option value="embedsu">Server 3 - Embed.su</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
