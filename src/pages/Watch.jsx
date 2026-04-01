@@ -15,8 +15,9 @@ export default function Watch() {
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [directStreamUrl, setDirectStreamUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
-  const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'player', 'trailer', 'custom', 'error'
+  const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'player', 'iframe', 'trailer', 'custom', 'error'
   const [gogoSlug, setGogoSlug] = useState(null);
+  const [zoroId, setZoroId] = useState(null);
   const [mappingError, setMappingError] = useState(false);
   const [loadingStream, setLoadingStream] = useState(false);
 
@@ -56,7 +57,12 @@ export default function Watch() {
     // Attempt 1: amvstr.me (Primary)
     try {
       const amvUrl = `/amvstr/api/v2/stream/${slug}-episode-${ep}`;
-      const res = await fetch(amvUrl);
+      const res = await fetch(amvUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Referer': 'https://amvstrm.me/'
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         // The API returns an array of streams, find the best one
@@ -107,6 +113,12 @@ export default function Watch() {
         if (url) {
           setDirectStreamUrl(url);
           setRenderMode('player');
+        } else if (zoroId) {
+          // Fallback to Iframe if direct stream fails but mapping is available
+          console.warn("[Player] Direct stream failed, falling back to Iframe embed");
+          const embedUrl = `https://vidsrc.icu/embed/anime/${zoroId}/${activeEpisode}`;
+          setActiveEmbedUrl(embedUrl);
+          setRenderMode('iframe');
         } else {
           setRenderMode('error');
         }
@@ -146,10 +158,25 @@ export default function Watch() {
 
           // 2. Resolve mapping via MAL-Sync
           const mapping = await fetchMappingData(id);
-          if (mapping && mapping.slug) {
-            setGogoSlug(mapping.slug);
+          if (mapping) {
+            setZoroId(mapping.zoroId);
+            
+            if (mapping.slug) {
+              setGogoSlug(mapping.slug);
+            } else {
+              // Fallback Slug Strategy: Generate from title
+              console.warn("[MAL-Sync] No Gogoanime slug found, generating fallback from title");
+              const titleSlug = metadata.title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+              setGogoSlug(titleSlug);
+              console.log(`[Player] Fallback Slug: ${titleSlug}`);
+            }
           } else {
-            console.warn("[MAL-Sync] No Gogoanime slug found");
+            console.warn("[MAL-Sync] Mapping completely missing, using generic title fallback");
+            const titleSlug = metadata.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            setGogoSlug(titleSlug);
             setMappingError(true);
           }
         }
@@ -254,6 +281,16 @@ export default function Watch() {
                     title={`${title} - Episode ${activeEpisode}`}
                   />
                 </div>
+              ) : renderMode === 'iframe' && activeEmbedUrl ? (
+                <iframe
+                  key={`${id}-${activeEpisode}-${activeEmbedUrl}`}
+                  title={`${title} - Episode ${activeEpisode}`}
+                  src={activeEmbedUrl}
+                  className="w-full h-full border-0 absolute inset-0 bg-black"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                  referrerPolicy="no-referrer"
+                  allowFullScreen
+                ></iframe>
               ) : null}
             </div>
 
