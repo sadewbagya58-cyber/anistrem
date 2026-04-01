@@ -15,3 +15,15 @@
   to = "https://api.jikan.moe/v4/:splat"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/amvstr/*"
+  to = "https://api.amvstr.me/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/consumet/*"
+  to = "https://api.consumet.sh/:splat"
+  status = 200
+  force = true

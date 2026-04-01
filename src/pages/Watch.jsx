@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactPlayer from 'react-player';
 import Navbar from '../components/Navbar';
-import { Play, Loader2, AlertCircle } from 'lucide-react';
+import VideoPlayer from '../components/VideoPlayer';
+import { Play, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Watch() {
   const { id } = useParams();
@@ -10,26 +11,17 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('hianime'); // 'hianime', '2embed', 'multiembed', 'trailer', 'custom'
+  const [videoServer, setVideoServer] = useState('direct'); // 'direct', 'direct_backup', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
+  const [directStreamUrl, setDirectStreamUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
-  const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'iframe', 'trailer', 'custom', 'error'
+  const [renderMode, setRenderMode] = useState('loading'); // 'loading', 'player', 'trailer', 'custom', 'error'
   const [gogoSlug, setGogoSlug] = useState(null);
   const [mappingError, setMappingError] = useState(false);
+  const [loadingStream, setLoadingStream] = useState(false);
 
-  // Triple Server System
-  // Server 1: Uses Zoro ID from MAL-Sync (best match)
-  // Server 2: Uses MAL ID directly (no mapping needed, always available)
-  const SERVERS_ZORO = {
-    hianime: (zoroId, ep) => `https://vidsrc.icu/embed/anime/${zoroId}/${ep}`
-  };
-  const SERVERS_MAL = {
-    hianime_mal: (malId, ep) => `https://vidsrc.icu/embed/anime/${malId}/${ep}`,
-    embedsu: (malId, ep) => `https://embed.su/embed/anime/${malId}/${ep}`
-  };
-
-  // Fetch the Zoro/HiAnime identifier from MAL-Sync API
-  const fetchStreamId = async (malId) => {
+  // Fetch the Gogoanime slug + Zoro ID from MAL-Sync API
+  const fetchMappingData = async (malId) => {
     try {
       console.log(`[MAL-Sync] Fetching mapping for MAL ID: ${malId}`);
       const res = await fetch(`/malsync/mal/anime/${malId}`);
@@ -37,57 +29,96 @@ export default function Watch() {
       const data = await res.json();
       const sites = data.Sites;
 
-      // Try Zoro first (hianime.to) — most reliable
-      if (sites?.Zoro) {
-        const zoroKey = Object.keys(sites.Zoro)[0];
-        const zoroData = sites.Zoro[zoroKey];
-        if (zoroData) {
-          console.log(`[MAL-Sync] Resolved Zoro ID: ${zoroKey}, URL: ${zoroData.url}`);
-          return { id: zoroKey, provider: 'zoro' };
-        }
+      // Primary: Extract Gogoanime slug (needed for direct amvstr API)
+      let slug = null;
+      if (sites?.Gogoanime) {
+        slug = Object.keys(sites.Gogoanime)[0];
       }
 
-      // Fallback: use MAL ID directly with vidsrc
-      console.warn('[MAL-Sync] No Zoro mapping, falling back to MAL ID');
-      return { id: malId, provider: 'mal_fallback' };
+      // Secondary: Extract Zoro ID (backup)
+      let zoroId = null;
+      if (sites?.Zoro) {
+        zoroId = Object.keys(sites.Zoro)[0];
+      }
+
+      console.log(`[MAL-Sync] Resolved Slug: ${slug}, ZoroID: ${zoroId}`);
+      return { slug, zoroId };
     } catch (e) {
       console.error('[MAL-Sync] Mapping failed:', e.message);
     }
     return null;
   };
 
-  // Generate iframe URL when server, episode, or slug changes
-  useEffect(() => {
-    if (!anime) return;
-
-    if (videoServer === 'trailer' || videoServer === 'custom') {
-      setRenderMode(videoServer);
-      return;
-    }
-
-    // Zoro ID based servers (need MAL-Sync mapping)
-    if (SERVERS_ZORO[videoServer]) {
-      if (gogoSlug) {
-        const url = SERVERS_ZORO[videoServer](gogoSlug, activeEpisode);
-        console.log(`[Player] Embed URL (Zoro): ${url}`);
-        setActiveEmbedUrl(url);
-        setRenderMode('iframe');
-      } else if (!mappingError) {
-        setRenderMode('loading');
-      } else {
-        setRenderMode('error');
+  // Fetch the actual .m3u8 stream link from various APIs
+  const fetchStreamUrl = async (slug, ep) => {
+    if (!slug) return null;
+    
+    // Attempt 1: amvstr.me (Primary)
+    try {
+      const amvUrl = `/amvstr/api/v2/stream/${slug}-episode-${ep}`;
+      const res = await fetch(amvUrl);
+      if (res.ok) {
+        const data = await res.json();
+        // The API returns an array of streams, find the best one
+        const bestStream = data.data?.streams?.find(s => s.quality === '1080p') || data.data?.streams?.[0];
+        if (bestStream?.url) {
+          console.log(`[StreamAPI] Found amvstr link: ${bestStream.url}`);
+          return bestStream.url;
+        }
       }
-      return;
+    } catch (e) {
+      console.warn("[StreamAPI] amvstr failed, trying fallback...");
     }
 
-    // MAL ID based servers (always available, no mapping needed)
-    if (SERVERS_MAL[videoServer]) {
-      const url = SERVERS_MAL[videoServer](id, activeEpisode);
-      console.log(`[Player] Embed URL (MAL): ${url}`);
-      setActiveEmbedUrl(url);
-      setRenderMode('iframe');
+    // Attempt 2: Consumet (Fallback)
+    try {
+      const conUrl = `/consumet/anime/gogoanime/watch/${slug}-episode-${ep}`;
+      const res = await fetch(conUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const bestSource = data.sources?.find(s => s.quality === '1080p' || s.quality === 'default') || data.sources?.[0];
+        if (bestSource?.url) {
+          console.log(`[StreamAPI] Found Consumet fallback: ${bestSource.url}`);
+          return bestSource.url;
+        }
+      }
+    } catch (e) {
+      console.error("[StreamAPI] All direct stream APIs failed");
     }
-  }, [activeEpisode, videoServer, anime, gogoSlug, mappingError, id]);
+
+    return null;
+  };
+
+  // Main Effect: Orchestrate slug resolution and stream fetching
+  useEffect(() => {
+    if (!anime || !gogoSlug) return;
+
+    const initPlayer = async () => {
+      if (videoServer === 'trailer' || videoServer === 'custom') {
+        setRenderMode(videoServer);
+        return;
+      }
+
+      setLoadingStream(true);
+      setRenderMode('loading');
+
+      try {
+        const url = await fetchStreamUrl(gogoSlug, activeEpisode);
+        if (url) {
+          setDirectStreamUrl(url);
+          setRenderMode('player');
+        } else {
+          setRenderMode('error');
+        }
+      } catch (e) {
+        setRenderMode('error');
+      } finally {
+        setLoadingStream(false);
+      }
+    };
+
+    initPlayer();
+  }, [activeEpisode, videoServer, anime, gogoSlug]);
 
   // Fetch anime metadata from Jikan + Gogoanime slug from MAL-Sync
   useEffect(() => {
@@ -97,7 +128,7 @@ export default function Watch() {
         setMappingError(false);
         setGogoSlug(null);
 
-        // 1. Fetch metadata from Jikan (MAL) - supports CORS natively
+        // 1. Fetch metadata from Jikan (MAL)
         const jikanUrl = `https://api.jikan.moe/v4/anime/${id}`;
         const res = await fetch(jikanUrl);
         const data = await res.json();
@@ -113,12 +144,12 @@ export default function Watch() {
             title: `Episode ${i + 1}`
           })));
 
-          // 2. Resolve stream ID via MAL-Sync
-          const result = await fetchStreamId(id);
-          if (result) {
-            setGogoSlug(result.id);
-            console.log(`[MAL-Sync] Using ${result.provider} with ID: ${result.id}`);
+          // 2. Resolve mapping via MAL-Sync
+          const mapping = await fetchMappingData(id);
+          if (mapping && mapping.slug) {
+            setGogoSlug(mapping.slug);
           } else {
+            console.warn("[MAL-Sync] No Gogoanime slug found");
             setMappingError(true);
           }
         }
@@ -163,20 +194,21 @@ export default function Watch() {
             {/* 16:9 Video Player */}
             <div className="w-full aspect-video bg-black rounded-lg overflow-hidden border border-white/5 relative shadow-2xl">
 
-              {/* Loading state while resolving MAL-Sync slug */}
-              {renderMode === 'loading' && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
-                  <Loader2 className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
-                  <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse">Resolving Stream...</span>
+              {/* Loading state while resolving stream */}
+              {(renderMode === 'loading' || loadingStream) && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+                  <RefreshCw className="w-12 h-12 text-[var(--color-brand)] animate-spin mb-4" />
+                  <span className="text-sm font-bold text-[var(--color-brand)] tracking-widest animate-pulse uppercase">Extracting Direct Stream...</span>
                 </div>
               )}
 
-              {/* Error state if MAL-Sync mapping failed */}
+              {/* Error state if stream failed */}
               {renderMode === 'error' && (
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black">
                   <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                  <span className="text-sm font-bold text-red-500 tracking-widest mb-2 uppercase">Stream Unavailable</span>
-                  <span className="text-xs text-text-muted px-8 text-center leading-relaxed">Could not find a Gogoanime mapping for this anime. Try the Trailer or Custom URL.</span>
+                  <span className="text-sm font-bold text-red-500 tracking-widest mb-2 uppercase">Stream Offline</span>
+                  <span className="text-xs text-text-muted px-8 text-center leading-relaxed">The direct stream for this episode could not be retrieved. Try the Trailer or switch providers.</span>
+                  <button onClick={() => window.location.reload()} className="mt-4 px-6 py-2 bg-surface hover:bg-surface-hover rounded-full text-xs font-bold transition-all border border-white/5">Retry Extraction</button>
                 </div>
               )}
 
@@ -213,16 +245,15 @@ export default function Watch() {
                     <span className="text-text-muted font-medium px-4 text-center">Please paste a standard streaming URL (.m3u8, .mp4, youtube)</span>
                   </div>
                 )
-              ) : renderMode === 'iframe' && activeEmbedUrl ? (
-                <iframe
-                  key={`${id}-${activeEpisode}-${videoServer}-${activeEmbedUrl}`}
-                  title={`${title} - Episode ${activeEpisode}`}
-                  src={activeEmbedUrl}
-                  className="w-full h-full border-0 absolute inset-0 bg-black"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                  referrerPolicy="no-referrer"
-                  allowFullScreen
-                ></iframe>
+              ) : renderMode === 'player' && directStreamUrl ? (
+                <div className="absolute inset-0 w-full h-full">
+                  <VideoPlayer 
+                    key={`${id}-${activeEpisode}-${videoServer}`}
+                    url={directStreamUrl} 
+                    poster={image}
+                    title={`${title} - Episode ${activeEpisode}`}
+                  />
+                </div>
               ) : null}
             </div>
 
@@ -235,9 +266,8 @@ export default function Watch() {
                     onChange={(e) => setVideoServer(e.target.value)}
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
-                    <option value="hianime">Server 1 - HiAnime (Primary)</option>
-                    <option value="hianime_mal">Server 2 - HiAnime via MAL ID</option>
-                    <option value="embedsu">Server 3 - Embed.su</option>
+                    <option value="direct">Server 1 - Direct Stream (amvstr)</option>
+                    <option value="direct_backup">Server 2 - Direct Stream (Consumet)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
