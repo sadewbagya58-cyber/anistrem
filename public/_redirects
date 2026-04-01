@@ -1,11 +1,5 @@
 # Redirects for Cloudflare Pages
 
-# API Proxies (Note: Cloudflare Pages _redirects only handles internal rewrites. 
-# Use the /functions directory for real API proxying behind a custom domain.)
-/malsync/* https://api.malsync.moe/:splat 200
-/jikan/* https://api.jikan.moe/v4/:splat 200
-/amvstr/* https://api.amvstr.me/:splat 200
-/consumet/* https://api.consumet.sh/:splat 200
-
 # SPA Routing - Ensures all frontend paths load index.html
+# This must be the ONLY rule if API proxying is handled via /functions.
 /* /index.html 200
