@@ -78,8 +78,8 @@ export default function Watch() {
 
   // Helper to generate a stable Iframe URL
   const getIframeUrl = (server, malId, ep) => {
-    if (server === 'embed_su') return `https://embed.su/embed/anime/${malId}/${ep}`;
-    if (server === 'vidsrc_pro') return `https://vidsrc.pro/embed/anime/${malId}/${ep}`;
+    if (server === 'vidsrc_to') return `https://vidsrc.to/embed/anime/${malId}/${ep}`;
+    if (server === 'vidsrc_xyz') return `https://vidsrc.xyz/embed/anime/${malId}/${ep}`;
     return null;
   };
 
@@ -109,18 +109,18 @@ export default function Watch() {
           console.warn("[Player] Native stream unavailable, auto-falling back to Stable Iframe...");
         }
 
-        // --- Layer 2: Main Iframe (embed.su) ---
-        if (videoServer === 'native' || videoServer === 'embed_su') {
-          const embedUrl = getIframeUrl('embed_su', id, activeEpisode);
+        // --- Layer 2: Main Iframe (vidsrc.to) ---
+        if (videoServer === 'native' || videoServer === 'vidsrc_to') {
+          const embedUrl = getIframeUrl('vidsrc_to', id, activeEpisode);
           setActiveEmbedUrl(embedUrl);
           setRenderMode('iframe');
           setLoadingStream(false);
           return;
         }
 
-        // --- Layer 3: Backup Iframe (vidsrc.pro) ---
-        if (videoServer === 'vidsrc_pro') {
-          const embedUrl = getIframeUrl('vidsrc_pro', id, activeEpisode);
+        // --- Layer 3: Backup Iframe (vidsrc.xyz) ---
+        if (videoServer === 'vidsrc_xyz') {
+          const embedUrl = getIframeUrl('vidsrc_xyz', id, activeEpisode);
           setActiveEmbedUrl(embedUrl);
           setRenderMode('iframe');
         } else {
@@ -309,8 +309,8 @@ export default function Watch() {
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
                     <option value="native">Server 1 - Native (Auto-Fallback)</option>
-                    <option value="embed_su">Server 2 - Stable Iframe (embed.su)</option>
-                    <option value="vidsrc_pro">Server 3 - Backup Iframe (vidsrc.pro)</option>
+                    <option value="vidsrc_to">Server 2 - Stable Iframe (vidsrc.to)</option>
+                    <option value="vidsrc_xyz">Server 3 - Backup Iframe (vidsrc.xyz)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>
