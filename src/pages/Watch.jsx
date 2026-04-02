@@ -11,7 +11,7 @@ export default function Watch() {
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeEpisode, setActiveEpisode] = useState(1);
-  const [videoServer, setVideoServer] = useState('direct'); // 'direct', 'direct_backup', 'trailer', 'custom'
+  const [videoServer, setVideoServer] = useState('native'); // 'native', 'vidsrc_me', 'vidsrc_pro', 'trailer', 'custom'
   const [activeEmbedUrl, setActiveEmbedUrl] = useState('');
   const [directStreamUrl, setDirectStreamUrl] = useState('');
   const [customUrl, setCustomUrl] = useState('');
@@ -50,54 +50,42 @@ export default function Watch() {
     return null;
   };
 
-  // Fetch the actual .m3u8 stream link from various APIs
+  // Fetch the actual .m3u8 stream link from Consumet (Gogoanime)
   const fetchStreamUrl = async (slug, ep) => {
     if (!slug) return null;
     
-    // Attempt 1: amvstr.me (Primary)
-    try {
-      const amvUrl = `/amvstr/api/v2/stream/${slug}-episode-${ep}`;
-      const res = await fetch(amvUrl, {
-        headers: {
-          'Accept': 'application/json',
-          'Referer': 'https://amvstrm.me/'
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // The API returns an array of streams, find the best one
-        const bestStream = data.data?.streams?.find(s => s.quality === '1080p') || data.data?.streams?.[0];
-        if (bestStream?.url) {
-          console.log(`[StreamAPI] Found amvstr link: ${bestStream.url}`);
-          return bestStream.url;
-        }
-      }
-    } catch (e) {
-      console.warn("[StreamAPI] amvstr failed, trying fallback...");
-    }
-
-    // Attempt 2: Consumet (Fallback)
+    // Attempt: Consumet (Gogoanime)
     try {
       const conUrl = `/consumet/anime/gogoanime/watch/${slug}-episode-${ep}`;
       const res = await fetch(conUrl);
       if (res.ok) {
         const data = await res.json();
-        const bestSource = data.sources?.find(s => s.quality === '1080p' || s.quality === 'default') || data.sources?.[0];
+        // Prefer 1080p, then default/720p
+        const bestSource = data.sources?.find(s => s.quality === '1080p') || 
+                           data.sources?.find(s => s.quality === 'default' || s.quality === '720p') || 
+                           data.sources?.[0];
         if (bestSource?.url) {
-          console.log(`[StreamAPI] Found Consumet fallback: ${bestSource.url}`);
+          console.log(`[StreamAPI] Found Consumet link: ${bestSource.url}`);
           return bestSource.url;
         }
       }
     } catch (e) {
-      console.error("[StreamAPI] All direct stream APIs failed");
+      console.warn("[StreamAPI] Consumet failed");
     }
 
     return null;
   };
 
-  // Main Effect: Orchestrate slug resolution and stream fetching
+  // Helper to generate a stable Iframe URL
+  const getIframeUrl = (server, malId, ep) => {
+    if (server === 'vidsrc_me') return `https://vidsrc.me/embed/anime?mal_id=${malId}&episode=${ep}`;
+    if (server === 'vidsrc_pro') return `https://vidsrc.pro/embed/anime/${malId}/${ep}`;
+    return null;
+  };
+
+  // Main Effect: Orchestrate slug resolution and stream fetching with 3-Layer Fallback
   useEffect(() => {
-    if (!anime || !gogoSlug) return;
+    if (!anime) return;
 
     const initPlayer = async () => {
       if (videoServer === 'trailer' || videoServer === 'custom') {
@@ -109,20 +97,37 @@ export default function Watch() {
       setRenderMode('loading');
 
       try {
-        const url = await fetchStreamUrl(gogoSlug, activeEpisode);
-        if (url) {
-          setDirectStreamUrl(url);
-          setRenderMode('player');
-        } else if (zoroId) {
-          // Fallback to Iframe if direct stream fails but mapping is available
-          console.warn("[Player] Direct stream failed, falling back to Iframe embed");
-          const embedUrl = `https://vidsrc.icu/embed/anime/${zoroId}/${activeEpisode}`;
+        // --- Layer 1: Native ArtPlayer (Direct Stream) ---
+        if (videoServer === 'native' && gogoSlug) {
+          const url = await fetchStreamUrl(gogoSlug, activeEpisode);
+          if (url) {
+            setDirectStreamUrl(url);
+            setRenderMode('player');
+            setLoadingStream(false);
+            return;
+          }
+          console.warn("[Player] Native stream unavailable, auto-falling back to Stable Iframe...");
+        }
+
+        // --- Layer 2: Main Iframe (vidsrc.me) ---
+        if (videoServer === 'native' || videoServer === 'vidsrc_me') {
+          const embedUrl = getIframeUrl('vidsrc_me', id, activeEpisode);
+          setActiveEmbedUrl(embedUrl);
+          setRenderMode('iframe');
+          setLoadingStream(false);
+          return;
+        }
+
+        // --- Layer 3: Backup Iframe (vidsrc.pro) ---
+        if (videoServer === 'vidsrc_pro') {
+          const embedUrl = getIframeUrl('vidsrc_pro', id, activeEpisode);
           setActiveEmbedUrl(embedUrl);
           setRenderMode('iframe');
         } else {
           setRenderMode('error');
         }
       } catch (e) {
+        console.error("[Player] Initialization failed:", e);
         setRenderMode('error');
       } finally {
         setLoadingStream(false);
@@ -130,7 +135,7 @@ export default function Watch() {
     };
 
     initPlayer();
-  }, [activeEpisode, videoServer, anime, gogoSlug]);
+  }, [activeEpisode, videoServer, anime, gogoSlug, id]);
 
   // Fetch anime metadata from Jikan + Gogoanime slug from MAL-Sync
   useEffect(() => {
@@ -303,8 +308,9 @@ export default function Watch() {
                     onChange={(e) => setVideoServer(e.target.value)}
                     className="flex-1 sm:w-64 bg-background border border-white/10 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:border-[var(--color-brand)] transition-colors cursor-pointer"
                   >
-                    <option value="direct">Server 1 - Direct Stream (amvstr)</option>
-                    <option value="direct_backup">Server 2 - Direct Stream (Consumet)</option>
+                    <option value="native">Server 1 - Native (Auto-Fallback)</option>
+                    <option value="vidsrc_me">Server 2 - Stable Iframe (vidsrc.me)</option>
+                    <option value="vidsrc_pro">Server 3 - Backup Iframe (vidsrc.pro)</option>
                     <option value="trailer">Watch Trailer</option>
                     <option value="custom">Custom URL</option>
                   </select>

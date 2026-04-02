@@ -5,10 +5,6 @@
       "destination": "https://api.malsync.moe/$1"
     },
     {
-      "source": "/amvstr/(.*)",
-      "destination": "https://api.amvstr.me/$1"
-    },
-    {
       "source": "/consumet/(.*)",
       "destination": "https://api.consumet.sh/$1"
     },
